@@ -1,0 +1,116 @@
+---
+title: "Untitled"
+author: "Cora Ferguson"
+date: "2023-10-19"
+output: html_document
+---
+
+---
+title: "CMF6 - 24 hr Live Dead HDF Encapsulation"
+author: "Cora Ferguson"
+date: "2023-09-14"
+output: html_document
+---
+
+##
+
+This is the experiment for the 24 hour solo encapsulation that I performed with human fibroblasts (P4).
+
+
+Prep environment and load data in
+
+```{r}
+# clear the environment 
+rm(list = ls())
+
+# import the libraries that we will use
+library(ggplot2)
+library(dplyr)
+library(here)
+library(ggfortify)
+```
+
+
+Now import the data for analysis:
+```{r}
+df <- read.csv(here("Data", "CMF10_live_dead_counts.csv"), stringsAsFactors = TRUE)
+
+# take a look at the structure of the data
+glimpse(df)
+```
+
+
+Now let's add a column to calculate the percent viability for the gels:
+```{r}
+# calculate percent viability
+df_clean <- df %>%
+  mutate(total_cells = Dead_cells+Live_cells,
+    percent_viability = Live_cells/(total_cells)*100)
+```
+
+Now let's graph this.  I will group these by gel type (UV vs Vis) and then calculate the mean viability plus or minus the standard error.
+
+
+```{r}
+viability_df <- df_clean %>%
+  select(Gel_ID, total_cells, percent_viability) %>%
+  group_by(Gel_ID)%>%
+  summarise(mean_viability = mean(percent_viability),
+            sd_viability = sd(percent_viability),
+            se_viability = sd(percent_viability)/sqrt(sum(percent_viability)))
+```
+
+Now let's graph this:
+
+```{r}
+viability_plt <- viability_df %>%
+  ggplot(aes(x = Gel_ID, y = mean_viability))+
+  geom_bar(stat = "identity", position = "dodge")+
+  geom_errorbar(aes(ymin = mean_viability - sd_viability,
+                       ymax = mean_viability + sd_viability), width = 0.1, position = position_dodge(0.9))+
+  theme_bw()+
+  labs(x = "Gel Type", y= "Mean Percent Viability") +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 100))
+
+viability_plt
+
+```
+
+Let's run a t test on this to assess the statistical relevance: 
+```{r}
+# run t-test for mass swelling ratio
+t.test(percent_viability ~ Gel_ID, data = df_clean)
+
+# check assumptions:
+qqnorm(df_clean$percent_viability, main='Normal')
+qqline(df_clean$percent_viability)
+```
+
+Let's look at viability as the distance from the outside edge of the gel to the inside edge of the gel
+
+```{r}
+vi_dis_df <- df_clean %>%
+  select(Light, Image_ID, percent_viability) %>%
+  filter(Image_ID <=7) %>%
+  mutate(gel_depth = Image_ID*50) %>%
+  group_by(Light, gel_depth) %>%
+  summarise(mean_viability = mean(percent_viability),
+            sd_viability = sd(percent_viability))
+
+vi_dis_plt <- vi_dis_df %>%
+  ggplot(aes(x = gel_depth, y = mean_viability, fill = Light))+
+  geom_bar(stat = "identity", position = "dodge")+
+  geom_errorbar(aes(ymin = mean_viability - sd_viability,
+                       ymax = mean_viability + sd_viability), width = 10, position = position_dodge(50))+
+  theme_bw()+
+  labs(x = "Gel Depth (um)", y= "Mean Percent Viability (%)") +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 100))+
+  scale_x_continuous(expand = c(0,0), limits = c(-25,400))
+
+vi_dis_plt
+
+```
+
+
+
+
